@@ -1,3 +1,8 @@
+---
+version: 0.13
+date:    Fri Dec 17 02:49:38 PST 2004
+changes:
+- commit is also called by commit_all. so it can't itself be a hook.
 version: 0.12
 date:    Wed Dec 15 14:41:31 PST 2004
 changes:

@@ -1,6 +1,6 @@
 package Kwiki::Archive::Rcs;
 use Kwiki::Archive -Base;
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 sub show_revisions {
     my $page = $self->pages->current;
@@ -16,11 +16,16 @@ sub file_path {
     $self->plugin_directory . '/' . $page->id . ',v';
 }
 
-sub commit {
+sub commit_hook {
     my $hook = pop;
     return unless $hook->returned_true;
     my $page = $self;
     $self = $page->hub->load_class('archive');
+    $self->commit($page);
+}
+
+sub commit {
+    my $page = shift;
     my $props = $self->page_properties($page);
     my $rcs_file_path = $self->file_path($page);
     $self->shell("rcs -q -i $rcs_file_path < /dev/null")
