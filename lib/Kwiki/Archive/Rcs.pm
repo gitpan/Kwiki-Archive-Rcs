@@ -1,40 +1,39 @@
 package Kwiki::Archive::Rcs;
-use strict;
-use warnings;
-use Kwiki::Archive '-Base';
-our $VERSION = '0.11';
+use Kwiki::Archive -Base;
+our $VERSION = '0.12';
+
+sub show_revisions {
+    my $page = $self->pages->current;
+    my $rcs_text = io($self->file_path($page))->all
+      or return 0;
+    $rcs_text =~ /^head\s+1\.(\d+)/
+      or return 0;
+    $1 > 1 ? $1 : 0;
+}
 
 sub file_path {
-    my $page_id = shift;
-    $self->plugin_directory . '/' . $page_id . ',v';
+    my $page = shift;
+    $self->plugin_directory . '/' . $page->id . ',v';
 }
 
 sub commit {
-    my $page = shift;
+    my $hook = pop;
+    return unless $hook->returned_true;
+    my $page = $self;
+    $self = $page->hub->load_class('archive');
     my $props = $self->page_properties($page);
-    my $rcs_file_path = $self->file_path($page->id);
-    if (not -f $rcs_file_path) {
-        $self->shell("rcs -q -i $rcs_file_path < /dev/null");
-    }
-
-    my $msg = join ',',
-      $self->uri_escape($props->{edit_by}),
-      $props->{edit_time},
-      $props->{edit_unixtime};
-
+    my $rcs_file_path = $self->file_path($page);
+    $self->shell("rcs -q -i $rcs_file_path < /dev/null")
+      unless -f $rcs_file_path;
+    my $msg = $self->$csv_encode($props);
     my $page_file_path = $page->io;
     $self->shell(qq{ci -q -l -m"$msg" $page_file_path $rcs_file_path});
-}
-
-sub revision_numbers {
-    my $page = shift;
-    [map $_->{revision_id}, @{$self->history($page)}];
 }
 
 sub fetch_metadata {
     my $page = shift;
     my $rev = shift;
-    my $rcs_file_path = $self->file_path($page->id);
+    my $rcs_file_path = $self->file_path($page);
     my $rlog = io("rlog -zLT -r $rev $rcs_file_path |") or die $!; 
     $rlog->utf8 if $self->use_utf8;
     $self->parse_metadata($rlog->all);
@@ -52,22 +51,20 @@ sub parse_metadata {
     my $msg = $3;
     chomp $msg;
 
-    my ($edit_by, $edit_time, $edit_unixtime) = split ',', $msg;
-    $edit_time ||= $2;
-    $edit_unixtime ||= 0;
+    my $metadata = 
+      $self->$csv_decode($msg) ||
+      $self->$older_decode($msg) ||
+      $self->$oldest_decode($msg);
     $revision_id =~ s/^1\.//;
-
-    return {
-        revision_id => $revision_id,
-        edit_by => $self->uri_unescape($edit_by),
-        edit_time => $edit_time,
-        edit_unixtime => $edit_unixtime,
-    };
+    $metadata->{revision_id} = $revision_id;
+    $metadata->{edit_time} ||= $2;
+    $metadata->{edit_unixtime} ||= 0;
+    return $metadata;
 }
 
 sub history {
     my $page = shift;
-    my $rcs_file_path = $self->file_path($page->id);
+    my $rcs_file_path = $self->file_path($page);
     my $rlog = io("rlog -zLT $rcs_file_path |") or die $!; 
     $rlog->utf8 if $self->use_utf8;
 
@@ -88,7 +85,7 @@ sub fetch {
     my $page = shift;
     my $revision_id = shift;
     my $revision = "1.$revision_id";
-    my $rcs_file_path = $self->file_path($page->id);
+    my $rcs_file_path = $self->file_path($page);
     local($/, *CO);
     open CO, qq{co -q -p$revision $rcs_file_path |}
       or die $!;
@@ -104,8 +101,48 @@ sub shell {
       or die "$command failed:\n$?\nin " . Cwd::cwd();
 }
 
-1;
+my sub csv_encode {
+    my $hash = shift;
+    join ',', map {
+        my $key = $_;
+        my $value = $self->uri_escape($hash->{$key});
+        "$key:$value";
+    } sort keys %$hash;
+}
 
+my sub csv_decode {
+    my $string = shift;
+    return unless $string =~ /edit_time:/;
+    return {
+        map {
+            my ($key, $value) = split ':', $_, 2;
+            $value = $self->uri_unescape($value);
+            ($key, $value);
+        } split /(?<!\\),/, $string
+    };
+}
+
+my sub older_decode {
+    my $string = shift;
+    return unless $string =~ /,/;
+    my ($edit_by, $edit_time, $edit_unixtime) = split ',', $string;
+    return {
+        edit_by => $self->uri_unescape($edit_by),
+        edit_time => $edit_time,
+        edit_unixtime => $edit_unixtime,
+    };
+}
+
+my sub oldest_decode {
+    my $string = shift;
+    if ($string =~ /^[\d\.]{7,}$/) {
+        return {edit_address => $string};
+    }
+    else {
+        return {edit_by => $string};
+    }
+}
+    
 __DATA__
 
 =head1 NAME 
