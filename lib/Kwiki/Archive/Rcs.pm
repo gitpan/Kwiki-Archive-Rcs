@@ -1,27 +1,26 @@
 package Kwiki::Archive::Rcs;
 use Kwiki::Archive -Base;
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 sub show_revisions {
     my $page = $self->pages->current;
-    my $rcs_text = io($self->file_path($page))->all
+    my $rcs_text = io($self->assert_file_path($page))->all
       or return 0;
     $rcs_text =~ /^head\s+1\.(\d+)/
       or return 0;
     $1 > 1 ? $1 : 0;
 }
 
+sub assert_file_path {
+    my $page = shift;
+    my $file_path = $self->file_path($page);
+    $self->commit($page) unless -e $file_path;
+    return $file_path;
+}
+
 sub file_path {
     my $page = shift;
     $self->plugin_directory . '/' . $page->id . ',v';
-}
-
-sub commit_hook {
-    my $hook = pop;
-    return unless $hook->returned_true;
-    my $page = $self;
-    $self = $page->hub->load_class('archive');
-    $self->commit($page);
 }
 
 sub commit {
@@ -38,7 +37,7 @@ sub commit {
 sub fetch_metadata {
     my $page = shift;
     my $rev = shift;
-    my $rcs_file_path = $self->file_path($page);
+    my $rcs_file_path = $self->assert_file_path($page);
     my $rlog = io("rlog -zLT -r $rev $rcs_file_path |") or die $!; 
     $rlog->utf8 if $self->use_utf8;
     $self->parse_metadata($rlog->all);
@@ -53,6 +52,7 @@ sub parse_metadata {
     /xms or die "Couldn't parse rlog:\n$log";
 
     my $revision_id = $1;
+    my $archive_date = $2;
     my $msg = $3;
     chomp $msg;
 
@@ -62,14 +62,17 @@ sub parse_metadata {
       $self->$oldest_decode($msg);
     $revision_id =~ s/^1\.//;
     $metadata->{revision_id} = $revision_id;
-    $metadata->{edit_time} ||= $2;
-    $metadata->{edit_unixtime} ||= 0;
+    $metadata->{edit_time} ||= $archive_date;
+    $metadata->{edit_unixtime} ||= do {
+        require Date::Manip;
+        Date::Manip::UnixDate(Date::Manip::ParseDate($archive_date), "%s");
+    };
     return $metadata;
 }
 
 sub history {
     my $page = shift;
-    my $rcs_file_path = $self->file_path($page);
+    my $rcs_file_path = $self->assert_file_path($page);
     my $rlog = io("rlog -zLT $rcs_file_path |") or die $!; 
     $rlog->utf8 if $self->use_utf8;
 
@@ -90,7 +93,7 @@ sub fetch {
     my $page = shift;
     my $revision_id = shift;
     my $revision = "1.$revision_id";
-    my $rcs_file_path = $self->file_path($page);
+    my $rcs_file_path = $self->assert_file_path($page);
     local($/, *CO);
     open CO, qq{co -q -p$revision $rcs_file_path |}
       or die $!;

@@ -1,4 +1,11 @@
 ---
+version: 0.14
+date:    Tue Jan 11 07:58:27 PST 2005
+changes:
+- Add archive if none for new page
+- Move commit hook to super class
+- Fix unix time to work for older stuff
+---
 version: 0.13
 date:    Fri Dec 17 02:49:38 PST 2004
 changes:

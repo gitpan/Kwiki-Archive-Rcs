@@ -8,7 +8,7 @@ version_from('lib/Kwiki/Archive/Rcs.pm');
 
 requires(qw(
     perl 5.6.1
-    Kwiki 0.35
+    Kwiki 0.37
 ));
 
 check_nmake();
