@@ -1,4 +1,9 @@
 ---
+version: 0.11
+date:    Sat Aug 14 21:45:20 PDT 2004
+changes:
+- Archive API changes by autrijus
+---
 version: 0.10
 date:    Mon Jun 21 15:53:33 PDT 2004
 changes:
