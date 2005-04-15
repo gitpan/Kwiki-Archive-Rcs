@@ -1,6 +1,6 @@
 package Kwiki::Archive::Rcs;
 use Kwiki::Archive -Base;
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 sub show_revisions {
     my $page = $self->pages->current;
@@ -27,11 +27,24 @@ sub commit {
     my $page = shift;
     my $props = $self->page_properties($page);
     my $rcs_file_path = $self->file_path($page);
-    $self->shell("rcs -q -i $rcs_file_path < /dev/null")
+    $self->shell("rcs -q -i -U $rcs_file_path < /dev/null")
       unless -f $rcs_file_path;
     my $msg = $self->$csv_encode($props);
     my $page_file_path = $page->io;
-    $self->shell(qq{ci -q -l -m"$msg" $page_file_path $rcs_file_path});
+    eval {
+        $self->shell(qq{ci -q -l -m"$msg" $page_file_path $rcs_file_path 2>/dev/null});
+    };
+    if ($@) {
+        $self->force_unlock_rcs_file($rcs_file_path);
+        $self->shell(qq{ci -q -l -m"$msg" $page_file_path $rcs_file_path});
+    }
+}
+
+# XXX This is needed because sometimes rcs gets different user name under
+# apache.
+sub force_unlock_rcs_file {
+    my $rcs_file = shift;
+    $self->shell("rcs -q -U -M -u $rcs_file < /dev/null 2>/dev/null");
 }
 
 sub fetch_metadata {
@@ -39,7 +52,7 @@ sub fetch_metadata {
     my $rev = shift;
     my $rcs_file_path = $self->assert_file_path($page);
     my $rlog = io("rlog -zLT -r $rev $rcs_file_path |") or die $!; 
-    $rlog->utf8 if $self->use_utf8;
+    $rlog->utf8 if $self->has_utf8;
     $self->parse_metadata($rlog->all);
 }
 
@@ -74,7 +87,7 @@ sub history {
     my $page = shift;
     my $rcs_file_path = $self->assert_file_path($page);
     my $rlog = io("rlog -zLT $rcs_file_path |") or die $!; 
-    $rlog->utf8 if $self->use_utf8;
+    $rlog->utf8 if $self->has_utf8;
 
     my $input = $rlog->all;
     $input =~ s/
@@ -97,7 +110,7 @@ sub fetch {
     local($/, *CO);
     open CO, qq{co -q -p$revision $rcs_file_path |}
       or die $!;
-    binmode(CO, ':utf8') if $self->use_utf8;
+    binmode(CO, ':utf8') if $self->has_utf8;
     scalar <CO>;
 }
 

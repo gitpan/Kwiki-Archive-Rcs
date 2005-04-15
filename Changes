@@ -1,4 +1,11 @@
 ---
+version: 0.15
+date:    Fri Apr 15 11:24:48 PDT 2005
+changes:
+- Accomdate Spoon Changes
+- Fixed rcs lock issues
+- eliminate rcs warnings
+---
 version: 0.14
 date:    Tue Jan 11 07:58:27 PST 2005
 changes:
