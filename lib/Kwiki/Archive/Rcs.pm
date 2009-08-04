@@ -1,6 +1,6 @@
 package Kwiki::Archive::Rcs;
 use Kwiki::Archive -Base;
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 sub show_revisions {
     my $page = $self->pages->current;
@@ -105,6 +105,7 @@ sub history {
 sub fetch {
     my $page = shift;
     my $revision_id = shift;
+    return unless $revision_id =~ /^\d+$/;
     my $revision = "1.$revision_id";
     my $rcs_file_path = $self->assert_file_path($page);
     local($/, *CO);

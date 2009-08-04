@@ -1,4 +1,9 @@
 ---
+version: 0.16
+date:    Tue Aug 4 9:49:00 CDT 2009
+changes:
+- Fixed a remotely exploitable hole, please update ASAP
+---
 version: 0.15
 date:    Fri Apr 15 11:24:48 PDT 2005
 changes:
